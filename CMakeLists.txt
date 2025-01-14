@@ -7,6 +7,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
-set(SOURCES src/vector.cpp)
+set(SOURCES src/vector.hpp)
 
 add_executable(vector_tests tests/main.cpp ${SOURCES})
