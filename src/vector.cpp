@@ -1,3 +1,7 @@
+#include <new>
+#include <memory>
+#include <exception>
+
 #include "vector.hpp"
 
 // public methods
@@ -8,26 +12,48 @@ Vector<T>::Vector() : data(nullptr), size_(0), capacity_(0) {}
 template <typename T>
 Vector<T>::Vector(size_t count, const T& value)
     : data(static_cast<T*>(operator new[](count * sizeof(T)))), size_(count), capacity_(count) {
-    for (size_t i = 0; i < count; i++) {
-        new(data + i) T(value);
+    try {
+        for (size_t i = 0; i < count; i++) {
+            new(data + i) T(value);
+        }
+    } catch (const std::bad_alloc& exception) {
+        for (size_t i = 0; i < count; i++) {
+            data[i].~T();
+        }
+        operator delete[](data);
+
+        throw exception;
     }
 }
 
 template <typename T>
 Vector<T>::Vector(std::initializer_list<T> init)
-    : data(static_cast<T*>(operator new[](init.size() * sizeof(T)))), size_(init.size()), capacity_(init.size()) {
-    size_t i = 0;
-    for (const auto& elem : init) {
-        new(data + i) T(elem);
-        i++;
+    : data(static_cast<T*>(operator new[](init.size() * sizeof(T)))), size_(0), capacity_(0) {
+    try {
+        std::uninitialized_copy(init.begin(), init.end(), data);
+        size_ = init.size();
+        capacity_ = init.size();
+    } catch (...) {
+        for (size_t i = 0; i < size_; ++i) {
+            data[i].~T();
+        }
+        operator delete[](data);
+
+        throw std::current_exception();;
     }
 }
 
 template <typename T>
 Vector<T>::Vector(const Vector& other)
-    : data(static_cast<T*>(operator new[](other.capacity_ * sizeof(T)))), size_(other.size_), capacity_(other.capacity_) {
-    for (size_t i = 0; i < size_; i++) {
-        new(data + i) T(other.data[i]);
+    : data(static_cast<T*>(operator new[](other.capacity_ * sizeof(T)))), size_(0), capacity_(0) {
+    try {
+        std::uninitialized_copy(other.data, other.data + other.size_, data);
+        size_ = other.size_;
+        capacity_ = other.capacity_;
+    } catch (...) {
+        operator delete[](data);
+
+        throw std::current_exception();;
     }
 }
 
@@ -43,6 +69,7 @@ template <typename T>
 Vector<T>::~Vector() {
     clear();
     operator delete[](data);
+    data = nullptr;
 }
 
 template <typename T>
@@ -148,7 +175,7 @@ void Vector<T>::push_back(const T& value) {
         reserve(capacity_ == 0 ? 1 : capacity_ * 2);
     }
 
-    new(data + size_) T(value);
+    new(&data[size_]) T(value);
     size_++;
 }
 
@@ -193,9 +220,24 @@ template <typename T>
 void Vector<T>::reallocate(size_t new_capacity) {
     T* new_data = static_cast<T*>(operator new[](new_capacity * sizeof(T)));
 
-    for (size_t i = 0; i < size_; i++) {
-        new(new_data + i) T(std::move(data[i]));
-        data[i].~T();
+    size_t i = 0;
+
+    try {
+        for (size_t i = 0; i < size_; i++) {
+            new(new_data + i) T(std::move(data[i]));
+            data[i].~T();
+        }
+    } catch (...) {
+        for (size_t j = 0; j < i; j++) {
+            new_data[j].~T();
+        }
+        operator delete[](new_data);
+
+        throw std::current_exception();;
+    }
+
+    for (size_t j = 0; j < size_; j++) {
+        data[j].~T();
     }
 
     operator delete[](data);

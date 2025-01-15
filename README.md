@@ -14,3 +14,7 @@ make
 ```sh
 ./vector_tests
 ```
+
+# Пути улучшения
+- Использовать std::allocator
+- 
